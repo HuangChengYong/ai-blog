@@ -86,7 +86,21 @@ export async function request<T>(path: string, init: RequestInit = {}) {
     if (response.status === 401 || response.status === 403) {
       clearToken()
     }
-    throw new ApiError(payload.message || statusMessage(response.status), payload.code || response.status, payload.traceId)
+
+    // 1. 获取基础错误提示
+    let errorMsg = payload.message || statusMessage(response.status)
+
+    // 2. 小细节：如果后端返回了 traceId，则拼接到提示信息末尾
+    if (payload.traceId) {
+      errorMsg = `${errorMsg} (凭证: ${payload.traceId})`
+    }
+
+    // 3. 抛出增强后的错误
+    throw new ApiError(
+        errorMsg,
+        payload.code || response.status,
+        payload.traceId
+    )
   }
 
   return payload.data as T

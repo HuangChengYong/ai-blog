@@ -2293,4 +2293,106 @@ main {
   .overview-grid {
     grid-template-columns: 1fr;
   }
+
+  /* ==========================================
+   科技感专属强化样式 (Tech-Noir / Cyber Enhancements)
+   ========================================== */
+
+  /* 1. 核心卡片全息面板化 (玻璃拟态 + 流光边框) */
+  .panel, .post-card, .login-card, .admin-page-head, .admin-kpi {
+    background: rgba(15, 23, 42, 0.45) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(34, 211, 238, 0.15) !important;
+    box-shadow:
+            0 8px 32px 0 rgba(0, 0, 0, 0.3),
+            inset 0 0 20px rgba(34, 211, 238, 0.05);
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  .panel:hover, .post-card:hover {
+    border-color: rgba(34, 211, 238, 0.6) !important;
+    box-shadow:
+            0 8px 32px 0 rgba(0, 0, 0, 0.4),
+            0 0 15px rgba(34, 211, 238, 0.3),
+            inset 0 0 30px rgba(34, 211, 238, 0.1);
+    transform: translateY(-4px);
+  }
+
+  /* 2. 交互按钮赛博朋克化 */
+  .el-button--primary {
+    background: transparent !important;
+    border: 1px solid var(--cyan) !important;
+    color: var(--cyan) !important;
+    text-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+    box-shadow: inset 0 0 10px rgba(34, 211, 238, 0.2);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .el-button--primary::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.4), transparent);
+    transition: all 0.4s ease;
+  }
+
+  .el-button--primary:hover {
+    background: rgba(34, 211, 238, 0.15) !important;
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.6), inset 0 0 15px rgba(34, 211, 238, 0.4);
+  }
+
+  .el-button--primary:hover::before {
+    left: 100%;
+    transition: all 0.4s ease;
+  }
+
+  /* 3. 输入框霓虹激活态 */
+  .el-input__wrapper {
+    background: rgba(8, 14, 27, 0.6) !important;
+    border: 1px solid rgba(148, 163, 184, 0.2) !important;
+    transition: border 0.3s, box-shadow 0.3s;
+  }
+
+  .el-input__wrapper.is-focus {
+    border: 1px solid var(--cyan) !important;
+    box-shadow: 0 0 12px rgba(34, 211, 238, 0.4) !important;
+  }
+
+  /* 4. 标题数据流扫描特效 */
+  .hero-copy h1, .login-copy h1, .admin-topbar h1 {
+    background: linear-gradient(to right, #ffffff, #22d3ee, #ffffff);
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: shine 4s linear infinite;
+  }
+
+  @keyframes shine {
+    to {
+      background-position: 200% center;
+    }
+  }
+
+  /* 数据流线段点缀 (装饰) */
+  .shell::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0;
+    width: 2px; height: 100vh;
+    background: linear-gradient(to bottom, transparent, var(--cyan), transparent);
+    opacity: 0.3;
+    animation: dataStream 3s ease-in-out infinite;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  @keyframes dataStream {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+  }
 }
