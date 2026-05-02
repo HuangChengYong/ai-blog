@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { Back, Clock, Connection } from '@element-plus/icons-vue'
-import { getAuthorById, getPublicArticleById, getRelatedPosts } from '../services/blog'
+import { Back, Clock, Connection, Top } from '@element-plus/icons-vue'
+import { getAuthorById, getPublicArticleById, getRelatedPosts, loadAuthors, loadPublicArticleById, loadPublicArticles } from '../services/blog'
+import MarkdownBody from '../components/MarkdownBody.vue'
 
 const route = useRoute()
 const post = computed(() => getPublicArticleById(String(route.params.id)))
 const author = computed(() => (post.value ? getAuthorById(post.value.authorId) : undefined))
 const relatedPosts = computed(() => (post.value ? getRelatedPosts(post.value) : []))
+
+async function loadPagePost() {
+  await Promise.all([loadAuthors(), loadPublicArticles()])
+  await loadPublicArticleById(String(route.params.id))
+}
+
+onMounted(loadPagePost)
+watch(() => route.params.id, loadPagePost)
 </script>
 
 <template>
@@ -38,9 +47,7 @@ const relatedPosts = computed(() => (post.value ? getRelatedPosts(post.value) : 
           </div>
         </div>
 
-        <p v-for="paragraph in post.content" :key="paragraph" class="article-paragraph">
-          {{ paragraph }}
-        </p>
+        <MarkdownBody :content="post.content" />
 
         <div class="article-tags">
           <el-tag v-for="tag in post.tags" :key="tag" effect="plain">{{ tag }}</el-tag>
@@ -61,6 +68,10 @@ const relatedPosts = computed(() => (post.value ? getRelatedPosts(post.value) : 
         </RouterLink>
       </div>
     </section>
+
+    <el-backtop :right="30" :bottom="96" class="page-backtop">
+      <el-icon><Top /></el-icon>
+    </el-backtop>
   </section>
 
   <el-empty v-else class="page-empty" description="没有找到这篇文章">

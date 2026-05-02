@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { ChatDotRound, Promotion, Search, TrendCharts } from '@element-plus/icons-vue'
-import { getAuthorById, getPublicArticles, getTopics } from '../services/blog'
+import { getAuthorById, getPublicArticles, getTopics, loadAuthors, loadPublicArticles, loadTopics } from '../services/blog'
 import type { PostCategory } from '../types/blog'
 
 const search = ref('')
@@ -19,6 +19,10 @@ const topics = getTopics()
 const tags = computed(() => ['全部', ...new Set(posts.value.flatMap((post) => post.tags))])
 const categories = computed(() => ['全部', ...new Set(posts.value.map((post) => post.category))] as Array<PostCategory | '全部'>)
 const hotQuestions = ['有哪些 RAG 文章？', '推荐 Agent 工作流内容', '最新发布了什么？']
+
+onMounted(async () => {
+  await Promise.all([loadAuthors(), loadTopics(), loadPublicArticles()])
+})
 
 const filteredPosts = computed(() => {
   const keyword = search.value.trim().toLowerCase()

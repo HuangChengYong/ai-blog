@@ -1,6 +1,6 @@
-export type PostCategory = 'AI 工程' | '模型应用' | '产品设计' | '开发实践'
+export type PostCategory = string
 
-export type DraftStatus = 'idea' | 'review' | 'ready'
+export type DraftStatus = 'idea' | 'review' | 'ready' | 'published'
 
 export type ListingStatus = 'unlisted' | 'listed'
 
@@ -17,9 +17,10 @@ export interface Post {
   id: string
   title: string
   summary: string
-  content: string[]
+  content: string
   authorId: string
   category: PostCategory
+  categoryId?: string
   tags: string[]
   cover: string
   readMinutes: number
@@ -41,9 +42,11 @@ export interface Draft {
   content: string
   status: DraftStatus
   listingStatus: ListingStatus
-  source: 'AI 生成' | '手写'
+  source: string
   updatedAt: string
   tags: string[]
+  authorId?: string
+  categoryId?: string
 }
 
 export interface GenerateArticleOptions {

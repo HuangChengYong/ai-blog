@@ -81,22 +81,23 @@ function resetSlider() {
   dragOffset.value = 0
 }
 
-function handleLogin() {
+async function handleLogin() {
   if (!sliderVerified.value) {
     ElMessage.warning('请先完成滑块验证')
     return
   }
 
   loading.value = true
-  const passed = login(form.username.trim(), form.password)
-  loading.value = false
-
-  if (!passed) {
+  try {
+    await login(form.username.trim(), form.password)
+  } catch {
     ElMessage.error('账号或密码不正确')
     resetSlider()
+    loading.value = false
     return
   }
 
+  loading.value = false
   ElMessage.success('登录成功')
   router.replace(typeof route.query.redirect === 'string' ? route.query.redirect : '/admin')
 }

@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Check, EditPen, FolderChecked, Promotion, RefreshLeft, SwitchButton } from '@element-plus/icons-vue'
+import { Check, Delete as DeleteIcon, EditPen, FolderChecked, Promotion, RefreshLeft, SwitchButton } from '@element-plus/icons-vue'
 import {
   approveDraft,
+  deleteDraft,
   getDrafts,
   listingStatusLabel,
+  loadDrafts,
+  rejectDraft,
   sendDraftToReview,
   setDraftListingStatus,
   statusLabel,
   updateDraft,
 } from '../services/blog'
+import MarkdownEditor from '../components/MarkdownEditor.vue'
 import type { Draft, DraftStatus, ListingStatus } from '../types/blog'
 
 type DraftFilter = DraftStatus | ListingStatus | 'all'
@@ -30,22 +34,25 @@ const editForm = reactive({
 const filterOptions = [
   { label: '全部', value: 'all' },
   { label: '灵感', value: 'idea' },
-  { label: '待审', value: 'review' },
+  { label: '待审核', value: 'review' },
   { label: '可发布', value: 'ready' },
+  { label: '已发布', value: 'published' },
   { label: '已上架', value: 'listed' },
   { label: '未上架', value: 'unlisted' },
 ]
 
 const visibleDrafts = computed(() => {
-  if (activeFilter.value === 'all') {
-    return drafts
-  }
-
-  if (activeFilter.value === 'listed' || activeFilter.value === 'unlisted') {
-    return drafts.filter((draft) => draft.listingStatus === activeFilter.value)
-  }
-
+  if (activeFilter.value === 'all') return drafts
+  if (activeFilter.value === 'listed' || activeFilter.value === 'unlisted') return drafts.filter((draft) => draft.listingStatus === activeFilter.value)
   return drafts.filter((draft) => draft.status === activeFilter.value)
+})
+
+onMounted(async () => {
+  try {
+    await loadDrafts()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '草稿加载失败')
+  }
 })
 
 function listingType(status: ListingStatus) {
@@ -61,13 +68,12 @@ function openEdit(draft: Draft) {
   editDialogVisible.value = true
 }
 
-function handleSaveEdit() {
+async function handleSaveEdit() {
   if (!editForm.title.trim()) {
     ElMessage.warning('标题不能为空')
     return
   }
-
-  updateDraft(currentDraftId.value, {
+  await updateDraft(currentDraftId.value, {
     title: editForm.title.trim(),
     summary: editForm.summary.trim(),
     content: editForm.content.trim(),
@@ -77,39 +83,65 @@ function handleSaveEdit() {
   ElMessage.success('草稿已更新')
 }
 
-function handleSubmitReview(draft: Draft) {
-  sendDraftToReview(draft.id)
-  ElMessage.success('已提交审批')
+async function handleSubmitReview(draft: Draft) {
+  await sendDraftToReview(draft.id)
+  ElMessage.success('已提交审核')
 }
 
-function handleApprove(draft: Draft) {
-  approveDraft(draft.id)
-  ElMessage.success('审批通过，草稿已进入可发布状态')
+async function handleApprove(draft: Draft) {
+  await approveDraft(draft.id)
+  ElMessage.success('审核通过')
 }
 
 async function handleReject(draft: Draft) {
   try {
-    await ElMessageBox.confirm('退回后草稿会回到灵感状态，并自动下架。', '退回修改', {
-      confirmButtonText: '退回',
+    await ElMessageBox.confirm('确定要驳回这篇文章并退回灵感状态吗？', '驳回文章', {
+      confirmButtonText: '驳回',
       cancelButtonText: '取消',
       type: 'warning',
     })
-    updateDraft(draft.id, { status: 'idea', listingStatus: 'unlisted' })
-    ElMessage.success('已退回修改')
+    await rejectDraft(draft.id)
+    ElMessage.success('已驳回')
   } catch {
-    // 用户取消时不需要提示。
+    // 用户取消。
   }
 }
 
-function handleToggleListing(draft: Draft) {
-  if (draft.status !== 'ready') {
-    ElMessage.warning('只有审批通过的草稿才能上架')
+function canToggleListing(draft: Draft) {
+  return draft.status === 'ready' || draft.status === 'published'
+}
+
+async function handleToggleListing(draft: Draft) {
+  if (!canToggleListing(draft)) {
+    ElMessage.warning('只有审核通过的文章才能上架')
+    return
+  }
+  const nextStatus: ListingStatus = draft.listingStatus === 'listed' ? 'unlisted' : 'listed'
+  await setDraftListingStatus(draft.id, nextStatus)
+  ElMessage.success(nextStatus === 'listed' ? '已上架' : '已下架')
+}
+
+async function handleDeleteDraft(draft: Draft) {
+  if (draft.listingStatus === 'listed') {
+    ElMessage.warning('已上架文章不能删除，请先下架')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('确定要删除这篇文章吗？文章中的图片也会同步删除。', '删除文章', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
     return
   }
 
-  const nextStatus: ListingStatus = draft.listingStatus === 'listed' ? 'unlisted' : 'listed'
-  setDraftListingStatus(draft.id, nextStatus)
-  ElMessage.success(nextStatus === 'listed' ? '已上架' : '已下架')
+  try {
+    await deleteDraft(draft.id)
+    ElMessage.success('文章已删除')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '删除失败')
+  }
 }
 </script>
 
@@ -118,20 +150,20 @@ function handleToggleListing(draft: Draft) {
     <div class="section-title-row">
       <div>
         <el-tag effect="dark" round>Draft Pipeline</el-tag>
-        <h1>草稿资产库</h1>
-        <p>编辑、审批、上架和下架都在前端 Mock 状态里完成，方便先验证内容管理体验。</p>
+        <h1>文章管理</h1>
+        <p>通过后端接口完成编辑、提交审核、审核通过、上架和下架。</p>
       </div>
       <RouterLink to="/write">
-        <el-button type="primary" size="large" :icon="EditPen">新建 AI 草稿</el-button>
+        <el-button type="primary" size="large" :icon="EditPen">AI 创建</el-button>
       </RouterLink>
     </div>
 
     <section class="tool-band compact">
       <el-segmented v-model="activeFilter" :options="filterOptions" />
-      <span>{{ visibleDrafts.length }} / {{ drafts.length }} 篇草稿</span>
+      <span>{{ visibleDrafts.length }} / {{ drafts.length }} 篇文章</span>
     </section>
 
-    <el-empty v-if="visibleDrafts.length === 0" description="当前筛选下还没有草稿" />
+    <el-empty v-if="visibleDrafts.length === 0" description="当前筛选下暂无草稿" />
 
     <section v-else class="draft-grid">
       <article v-for="draft in visibleDrafts" :key="draft.id" class="draft-card">
@@ -156,22 +188,18 @@ function handleToggleListing(draft: Draft) {
 
         <div class="draft-action-bar">
           <el-button :icon="FolderChecked" @click="openEdit(draft)">编辑</el-button>
-          <el-button v-if="draft.status === 'idea'" :icon="Promotion" @click="handleSubmitReview(draft)">
-            提交审批
-          </el-button>
-          <el-button v-if="draft.status === 'review'" type="success" :icon="Check" @click="handleApprove(draft)">
-            审批通过
-          </el-button>
-          <el-button v-if="draft.status !== 'idea'" :icon="RefreshLeft" @click="handleReject(draft)">
-            退回
-          </el-button>
+          <el-button v-if="draft.status === 'idea'" :icon="Promotion" @click="handleSubmitReview(draft)">提交</el-button>
+          <el-button v-if="draft.status === 'review'" type="success" :icon="Check" @click="handleApprove(draft)">通过</el-button>
+          <el-button v-if="draft.status !== 'idea'" :icon="RefreshLeft" @click="handleReject(draft)">驳回</el-button>
           <el-button
+            v-if="canToggleListing(draft)"
             :type="draft.listingStatus === 'listed' ? 'warning' : 'primary'"
             :icon="SwitchButton"
             @click="handleToggleListing(draft)"
           >
             {{ draft.listingStatus === 'listed' ? '下架' : '上架' }}
           </el-button>
+          <el-button v-if="draft.listingStatus !== 'listed'" type="danger" :icon="DeleteIcon" @click="handleDeleteDraft(draft)">删除</el-button>
         </div>
 
         <div class="draft-footer">
@@ -181,7 +209,7 @@ function handleToggleListing(draft: Draft) {
       </article>
     </section>
 
-    <el-dialog v-model="editDialogVisible" title="编辑草稿" width="min(720px, 92vw)">
+    <el-dialog v-model="editDialogVisible" title="编辑文章" width="min(720px, 92vw)">
       <el-form label-position="top">
         <el-form-item label="标题">
           <el-input v-model="editForm.title" size="large" />
@@ -190,7 +218,7 @@ function handleToggleListing(draft: Draft) {
           <el-input v-model="editForm.summary" type="textarea" :rows="3" />
         </el-form-item>
         <el-form-item label="正文">
-          <el-input v-model="editForm.content" type="textarea" :rows="10" />
+          <MarkdownEditor v-model="editForm.content" />
         </el-form-item>
         <el-form-item label="标签">
           <el-select v-model="editForm.tags" multiple filterable allow-create default-first-option>

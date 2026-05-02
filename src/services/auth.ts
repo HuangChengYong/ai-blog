@@ -1,41 +1,61 @@
 import { ref } from 'vue'
+import { clearToken, getStoredUser, getToken, request, setStoredUser, setToken } from './api'
 
-const AUTH_KEY = 'ai-blog-admin-session'
-const PASSWORD_KEY = 'ai-blog-admin-password'
-const ADMIN_USERNAME = 'admin'
-const DEFAULT_ADMIN_PASSWORD = 'huangcy125643'
-
-export const isAuthenticated = ref(window.localStorage.getItem(AUTH_KEY) === 'active')
-
-function currentPassword() {
-  return window.localStorage.getItem(PASSWORD_KEY) || DEFAULT_ADMIN_PASSWORD
+interface LoginResponse {
+  tokenType: string
+  accessToken: string
+  userId: string
+  username: string
+  nickname: string
+  permissions: string[]
 }
+
+interface CurrentUserResponse {
+  id: string
+  username: string
+  nickname: string
+  permissions: string[]
+}
+
+export const isAuthenticated = ref(Boolean(getToken()))
 
 export function getAdminUsername() {
-  return ADMIN_USERNAME
+  return getStoredUser()?.nickname || getStoredUser()?.username || 'admin'
 }
 
-export function login(username: string, password: string) {
-  const passed = username === ADMIN_USERNAME && password === currentPassword()
+export async function login(username: string, password: string) {
+  const session = await request<LoginResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
 
-  if (passed) {
-    window.localStorage.setItem(AUTH_KEY, 'active')
-    isAuthenticated.value = true
-  }
-
-  return passed
+  setToken(session.accessToken)
+  setStoredUser({ username: session.username, nickname: session.nickname, permissions: session.permissions })
+  isAuthenticated.value = true
+  return true
 }
 
-export function changePassword(current: string, next: string) {
-  if (current !== currentPassword()) {
-    return false
-  }
+export async function loadCurrentUser() {
+  const current = await request<CurrentUserResponse>('/admin/current')
+  setStoredUser({ username: current.username, nickname: current.nickname, permissions: current.permissions })
+  isAuthenticated.value = true
+  return current
+}
 
-  window.localStorage.setItem(PASSWORD_KEY, next)
+export function hasPermission(permission: string) {
+  const permissions = getStoredUser()?.permissions || []
+  return permissions.includes(permission)
+}
+
+export async function changePassword(current: string, next: string) {
+  await request<void>('/admin/current/password', {
+    method: 'PUT',
+    body: JSON.stringify({ currentPassword: current, newPassword: next }),
+  })
   return true
 }
 
 export function logout() {
-  window.localStorage.removeItem(AUTH_KEY)
+  clearToken()
   isAuthenticated.value = false
 }

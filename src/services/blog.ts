@@ -1,102 +1,189 @@
 import { reactive } from 'vue'
-import { authors, initialDrafts, posts, topics } from '../data/mock'
-import type { Draft, DraftStatus, GenerateArticleOptions, ListingStatus, Post } from '../types/blog'
+import { request, type PageResult } from './api'
+import type { Author, Draft, DraftStatus, GenerateArticleOptions, ListingStatus, Post, Topic } from '../types/blog'
 
-const draftStore = reactive<Draft[]>([...initialDrafts])
+interface ArticleDto {
+  id: string | null
+  title: string
+  summary: string
+  content: string
+  authorId: string
+  authorName?: string
+  categoryId: string
+  category?: string
+  tags: string[]
+  source: string
+  status: string
+  listingStatus: string
+  cover: string
+  readMinutes: number
+  heat: number
+  publishedAt?: string
+  updatedAt?: string
+}
 
-const wait = (ms = 500) => new Promise((resolve) => window.setTimeout(resolve, ms))
+interface AuthorDto {
+  id: string
+  name: string
+  role: string
+  avatar: string
+  bio: string
+  aiPreference: string
+}
+
+interface TopicDto {
+  id: string
+  title: string
+  description: string
+  tags: string[]
+}
+
+const publicPosts = reactive<Post[]>([])
+const authors = reactive<Author[]>([])
+const topics = reactive<Topic[]>([])
+const draftStore = reactive<Draft[]>([])
+const approvalDraftStore = reactive<Draft[]>([])
+
+export async function loadPublicArticles() {
+  const page = await request<PageResult<ArticleDto>>('/public/articles?page=1&size=100')
+  replace(publicPosts, page.records.map(toPost))
+  return publicPosts
+}
 
 export function getPosts() {
-  return posts
+  return publicPosts
+}
+
+export async function loadPublicArticleById(id: string) {
+  const article = await request<ArticleDto>(`/public/articles/${id}`)
+  const post = toPost(article)
+  const index = publicPosts.findIndex((item) => item.id === post.id)
+
+  if (index >= 0) {
+    publicPosts.splice(index, 1, post)
+  } else {
+    publicPosts.push(post)
+  }
+
+  return post
 }
 
 export function getPostById(id: string) {
-  return posts.find((post) => post.id === id)
+  return publicPosts.find((post) => post.id === id)
 }
 
 export function getPublicArticles() {
-  return [...posts, ...draftStore.filter((draft) => draft.listingStatus === 'listed').map(draftToPost)]
+  return publicPosts
 }
 
 export function getPublicArticleById(id: string) {
-  return getPublicArticles().find((post) => post.id === id)
+  return publicPosts.find((post) => post.id === id)
+}
+
+export async function loadAuthors() {
+  const result = await request<AuthorDto[]>('/public/authors')
+  replace(authors, result.map((author) => ({ ...author, id: String(author.id) })))
+  return authors
 }
 
 export function getAuthorById(id: string) {
   return authors.find((author) => author.id === id)
 }
 
+export async function loadTopics() {
+  const result = await request<TopicDto[]>('/public/topics')
+  replace(topics, result.map((topic) => ({ ...topic, id: String(topic.id) })))
+  return topics
+}
+
 export function getTopics() {
   return topics
+}
+
+export async function loadDrafts() {
+  const page = await request<PageResult<ArticleDto>>('/admin/articles?page=1&size=100')
+  replace(draftStore, page.records.map(toDraft))
+  return draftStore
 }
 
 export function getDrafts() {
   return draftStore
 }
 
-export function createDraft(payload: Omit<Draft, 'id' | 'updatedAt'>) {
-  const draft: Draft = {
-    ...payload,
-    id: `draft-${Date.now()}`,
-    updatedAt: formatDateTime(),
-  }
+export async function loadApprovalDrafts() {
+  const page = await request<PageResult<ArticleDto>>('/admin/approvals/articles?page=1&size=100')
+  replace(approvalDraftStore, page.records.map(toDraft))
+  return approvalDraftStore
+}
 
+export function getApprovalDrafts() {
+  return approvalDraftStore
+}
+
+export async function createDraft(payload: Omit<Draft, 'id' | 'updatedAt'>) {
+  const article = await request<ArticleDto>('/admin/articles', {
+    method: 'POST',
+    body: JSON.stringify(toArticleRequest(payload)),
+  })
+  const draft = toDraft(article)
   draftStore.unshift(draft)
   return draft
 }
 
-export function updateDraft(id: string, payload: Partial<Omit<Draft, 'id' | 'updatedAt'>>) {
-  const draft = draftStore.find((item) => item.id === id)
+export async function updateDraft(id: string, payload: Partial<Omit<Draft, 'id' | 'updatedAt'>>) {
+  const current = draftStore.find((item) => item.id === id)
 
-  if (!draft) {
+  if (!current) {
     return undefined
   }
 
-  Object.assign(draft, payload, { updatedAt: formatDateTime() })
+  const article = await request<ArticleDto>(`/admin/articles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(toArticleRequest({ ...current, ...payload })),
+  })
+  const draft = toDraft(article)
+  const index = draftStore.findIndex((item) => item.id === id)
+  draftStore.splice(index, 1, draft)
   return draft
 }
 
-export function approveDraft(id: string) {
-  return updateDraft(id, { status: 'ready' })
+export async function approveDraft(id: string) {
+  return patchDraft(id, 'approve')
 }
 
-export function sendDraftToReview(id: string) {
-  return updateDraft(id, { status: 'review', listingStatus: 'unlisted' })
+export async function sendDraftToReview(id: string) {
+  return patchDraft(id, 'submit')
 }
 
-export function setDraftListingStatus(id: string, listingStatus: ListingStatus) {
-  return updateDraft(id, { listingStatus })
+export async function rejectDraft(id: string) {
+  return patchDraft(id, 'reject')
 }
 
-export async function generateMockArticle(prompt: string, options: GenerateArticleOptions) {
-  await wait(900)
+export async function setDraftListingStatus(id: string, listingStatus: ListingStatus) {
+  const article = await request<ArticleDto>(`/admin/articles/${id}/listing`, {
+    method: 'PATCH',
+    body: JSON.stringify({ listingStatus: listingStatus.toUpperCase() }),
+  })
+  return replaceDraft(article)
+}
 
-  const cleanPrompt = prompt.trim() || 'AI 博客平台的内容增长策略'
-  const tagLine = options.tags.length ? options.tags.join('、') : 'AI、内容、工程化'
-  const outline = [
-    `为什么「${cleanPrompt}」值得现在讨论`,
-    `用 ${options.style} 视角拆解关键问题`,
-    `围绕 ${tagLine} 设计可执行方案`,
-    '如何验证效果并持续迭代',
-  ]
+export async function deleteDraft(id: string) {
+  await request<void>(`/admin/articles/${id}`, { method: 'DELETE' })
+  removeDraft(id)
+  return true
+}
+
+export async function generateArticle(prompt: string, options: GenerateArticleOptions) {
+  const article = await request<ArticleDto>('/admin/articles/generate', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, style: options.style, length: options.length, tags: options.tags }),
+  })
 
   return {
-    title: cleanPrompt,
-    summary: `一篇偏${options.style}风格的${options.length}文章，聚焦 ${tagLine} 的真实落地路径。`,
-    content: [
-      `# ${cleanPrompt}`,
-      '',
-      `这篇草稿会从 ${options.style} 的角度切入，先定义问题，再把 AI 能力放回具体的内容生产流程里。`,
-      '',
-      '## 大纲',
-      ...outline.map((item, index) => `${index + 1}. ${item}`),
-      '',
-      '## 正文草稿',
-      `如果一个 AI 博客平台想真正帮助作者，核心不是让模型替作者做完所有判断，而是把选题、资料整理、结构生成和发布检查变成连续、透明的工作流。`,
-      `在这个流程里，${tagLine} 不是孤立标签，而是系统理解文章意图、推荐参考内容和沉淀草稿资产的入口。`,
-      '第一版可以先用清晰的 Mock 数据跑通体验，后续再把生成、检索和发布接入真实服务。',
-    ].join('\n'),
-    tags: options.tags.length ? options.tags : ['AI 写作', '内容平台'],
+    title: article.title,
+    summary: article.summary,
+    content: article.content,
+    tags: article.tags,
   }
 }
 
@@ -112,30 +199,12 @@ export function getRelatedPosts(current: Post) {
     .map(({ post }) => post)
 }
 
-function draftToPost(draft: Draft): Post {
-  return {
-    id: draft.id,
-    title: draft.title,
-    summary: draft.summary,
-    content: draft.content
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean),
-    authorId: 'a-01',
-    category: 'AI 工程',
-    tags: draft.tags,
-    cover: 'linear-gradient(135deg, #0f172a, #22d3ee 46%, #34d399)',
-    readMinutes: Math.max(3, Math.ceil(draft.content.length / 450)),
-    heat: draft.listingStatus === 'listed' ? 72 : 0,
-    publishedAt: draft.updatedAt,
-  }
-}
-
 export function statusLabel(status: DraftStatus) {
   return {
     idea: '灵感',
-    review: '待审',
+    review: '待审核',
     ready: '可发布',
+    published: '已发布',
   }[status]
 }
 
@@ -146,12 +215,125 @@ export function listingStatusLabel(status: ListingStatus) {
   }[status]
 }
 
-function formatDateTime() {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date())
+async function patchDraft(id: string, action: 'submit' | 'approve' | 'reject') {
+  const article = await request<ArticleDto>(`/admin/articles/${id}/${action}`, { method: 'PATCH' })
+  return replaceDraft(article)
+}
+
+function replaceDraft(article: ArticleDto) {
+  const draft = toDraft(article)
+  const index = draftStore.findIndex((item) => item.id === draft.id)
+
+  if (index >= 0) {
+    draftStore.splice(index, 1, draft)
+  } else {
+    draftStore.unshift(draft)
+  }
+
+  const approvalIndex = approvalDraftStore.findIndex((item) => item.id === draft.id)
+  if (draft.status === 'review') {
+    if (approvalIndex >= 0) {
+      approvalDraftStore.splice(approvalIndex, 1, draft)
+    } else {
+      approvalDraftStore.unshift(draft)
+    }
+  } else if (approvalIndex >= 0) {
+    approvalDraftStore.splice(approvalIndex, 1)
+  }
+
+  return draft
+}
+
+function removeDraft(id: string) {
+  const index = draftStore.findIndex((item) => item.id === id)
+  if (index >= 0) {
+    draftStore.splice(index, 1)
+  }
+  const approvalIndex = approvalDraftStore.findIndex((item) => item.id === id)
+  if (approvalIndex >= 0) {
+    approvalDraftStore.splice(approvalIndex, 1)
+  }
+}
+
+function toPost(article: ArticleDto): Post {
+  return {
+    id: String(article.id),
+    title: article.title,
+    summary: article.summary,
+    content: article.content,
+    authorId: String(article.authorId),
+    categoryId: String(article.categoryId),
+    category: article.category || '未分类',
+    tags: article.tags || [],
+    cover: article.cover,
+    readMinutes: article.readMinutes || 3,
+    heat: article.heat || 0,
+    publishedAt: formatDate(article.publishedAt || article.updatedAt),
+  }
+}
+
+function toDraft(article: ArticleDto): Draft {
+  return {
+    id: String(article.id),
+    title: article.title,
+    summary: article.summary,
+    content: article.content,
+    status: normalizeStatus(article.status),
+    listingStatus: normalizeListingStatus(article.listingStatus),
+    source: normalizeSource(article.source),
+    updatedAt: formatDateTime(article.updatedAt),
+    tags: article.tags || [],
+    authorId: String(article.authorId),
+    categoryId: String(article.categoryId),
+  }
+}
+
+function toArticleRequest(draft: Omit<Draft, 'id' | 'updatedAt'> | Draft) {
+  return {
+    title: draft.title,
+    summary: draft.summary,
+    content: draft.content,
+    tags: draft.tags,
+    authorId: draft.authorId,
+    categoryId: draft.categoryId,
+    source: draft.source === 'AI 生成' ? 'AI_GENERATED' : 'MANUAL',
+  }
+}
+
+function normalizeStatus(status: string): DraftStatus {
+  const normalized = status.toLowerCase()
+
+  if (normalized === 'published') {
+    return 'published'
+  }
+
+  if (normalized === 'ready' || normalized === 'review' || normalized === 'idea') {
+    return normalized
+  }
+
+  return 'idea'
+}
+
+function normalizeListingStatus(status: string): ListingStatus {
+  return status.toLowerCase() === 'listed' ? 'listed' : 'unlisted'
+}
+
+function normalizeSource(source: string) {
+  return source === 'AI_GENERATED' ? 'AI 生成' : '手写'
+}
+
+function formatDate(value?: string) {
+  return value ? value.slice(0, 10) : ''
+}
+
+function formatDateTime(value?: string) {
+  if (!value) {
+    return ''
+  }
+
+  return value.replace('T', ' ').slice(0, 16)
+}
+
+function replace<T>(target: T[], values: T[]) {
+  target.splice(0, target.length, ...values)
 }
