@@ -106,7 +106,6 @@
 }
 
 html {
-  overflow-y: scroll;
   scrollbar-gutter: stable;
 }
 
@@ -114,11 +113,16 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  overflow-y: scroll;
+  overflow-x: hidden;
   background: var(--page-bg);
   transition:
     background 0.45s ease,
     color 0.45s ease;
+}
+
+body.el-popup-parent--hidden {
+  overflow: hidden !important;
+  width: 100%;
 }
 
 a {
@@ -2086,6 +2090,31 @@ main {
 
 .el-empty__description p {
   color: var(--muted);
+}
+
+.el-overlay {
+  overflow: hidden;
+}
+
+.el-drawer {
+  color: var(--text);
+  background: var(--surface-strong);
+}
+
+.el-drawer__header {
+  margin-bottom: 0;
+  color: var(--text);
+}
+
+.el-drawer__body {
+  color: var(--text);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.el-drawer__footer {
+  border-top: 1px solid var(--line);
+  background: var(--surface-strong);
 }
 
 @keyframes gridDrift {

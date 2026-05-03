@@ -32,6 +32,7 @@ export interface AdminRole {
   users: number
   description: string
   permissions: string[]
+  permissionCodes: string[]
 }
 
 export interface AdminPermissionItem {
@@ -70,6 +71,17 @@ export function loadAdminUsers() {
 
 export function loadAdminRoles() {
   return request<AdminRole[]>('/admin/roles')
+}
+
+export function loadAdminRole(id: string) {
+  return request<AdminRole>(`/admin/roles/${id}`)
+}
+
+export function updateAdminRole(id: string, payload: { name: string; description: string; permissionCodes: string[] }) {
+  return request<AdminRole>(`/admin/roles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
 }
 
 export function loadAdminPermissionGroups() {
