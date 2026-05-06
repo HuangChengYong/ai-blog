@@ -18,6 +18,7 @@ import {
   statusLabel,
   updateDraft,
 } from '../../services/blog'
+import { hasPermission } from '../../services/auth'
 import MarkdownBody from '../../components/MarkdownBody.vue'
 import MarkdownEditor from '../../components/MarkdownEditor.vue'
 import type { Draft, DraftStatus, ListingStatus } from '../../types/blog'
@@ -179,17 +180,17 @@ async function handleDeleteDraft(draft: Draft) {
         </div>
         <div class="draft-action-bar">
           <el-button :icon="Document" @click="openPreview(draft)">预览</el-button>
-          <el-button :icon="EditPen" @click="openEdit(draft)">编辑</el-button>
-          <el-button v-if="draft.status === 'idea'" :icon="Promotion" @click="handleSubmitReview(draft)">提交</el-button>
+          <el-button v-if="hasPermission('article.edit')" :icon="EditPen" @click="openEdit(draft)">编辑</el-button>
+          <el-button v-if="draft.status === 'idea' && hasPermission('article.create')" :icon="Promotion" @click="handleSubmitReview(draft)">提交</el-button>
           <el-button
-            v-if="canToggleListing(draft)"
+            v-if="canToggleListing(draft) && hasPermission('article.publish')"
             :type="draft.listingStatus === 'listed' ? 'warning' : 'primary'"
             :icon="SwitchButton"
             @click="handleToggleListing(draft)"
           >
             {{ draft.listingStatus === 'listed' ? '下架' : '上架' }}
           </el-button>
-          <el-button v-if="draft.listingStatus !== 'listed'" type="danger" :icon="DeleteIcon" @click="handleDeleteDraft(draft)">删除</el-button>
+          <el-button v-if="draft.listingStatus !== 'listed' && hasPermission('article.delete')" type="danger" :icon="DeleteIcon" @click="handleDeleteDraft(draft)">删除</el-button>
         </div>
       </article>
     </section>

@@ -10,6 +10,7 @@ import {
   rejectDraft,
   statusLabel,
 } from '../../services/blog'
+import { hasPermission } from '../../services/auth'
 import MarkdownBody from '../../components/MarkdownBody.vue'
 import type { Draft, ListingStatus } from '../../types/blog'
 
@@ -67,8 +68,8 @@ async function handleReject(draft: Draft) {
         </div>
         <div class="draft-action-bar">
           <el-button :icon="Document" @click="openPreview(draft)">预览</el-button>
-          <el-button type="success" :icon="Check" @click="handleApprove(draft)">通过</el-button>
-          <el-button :icon="RefreshLeft" @click="handleReject(draft)">驳回</el-button>
+          <el-button v-if="hasPermission('approval.review')" type="success" :icon="Check" @click="handleApprove(draft)">通过</el-button>
+          <el-button v-if="hasPermission('approval.review')" :icon="RefreshLeft" @click="handleReject(draft)">驳回</el-button>
         </div>
       </article>
     </section>

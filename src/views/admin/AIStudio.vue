@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { Collection, DocumentAdd, MagicStick } from '@element-plus/icons-vue'
 import { createDraft, generateArticle } from '../../services/blog'
 import { loadAdminStudioOptions, type AdminStudioOptions } from '../../services/admin'
+import { hasPermission } from '../../services/auth'
 import MarkdownEditor from '../../components/MarkdownEditor.vue'
 import type { GenerateArticleOptions } from '../../types/blog'
 
@@ -120,8 +121,8 @@ async function handleSaveDraft() {
         </el-form>
 
         <div class="action-row">
-          <el-button type="primary" size="large" :loading="loading" :icon="MagicStick" @click="handleGenerate">生成文章</el-button>
-          <el-button size="large" :icon="DocumentAdd" @click="handleSaveDraft">保存草稿</el-button>
+          <el-button v-if="hasPermission('studio.generate')" type="primary" size="large" :loading="loading" :icon="MagicStick" @click="handleGenerate">生成文章</el-button>
+          <el-button v-if="hasPermission('article.create')" size="large" :icon="DocumentAdd" @click="handleSaveDraft">保存草稿</el-button>
         </div>
       </section>
 

@@ -12,6 +12,8 @@ import {
   Setting,
 } from '@element-plus/icons-vue'
 import {
+  createAdminRole,
+  deleteAdminRole,
   loadAdminPermissionGroups,
   loadAdminRole,
   loadAdminRoles,
@@ -19,6 +21,7 @@ import {
   type AdminPermissionGroup,
   type AdminRole,
 } from '../../services/admin'
+import { hasPermission } from '../../services/auth'
 
 const roles = ref<AdminRole[]>([])
 const permissionGroups = ref<AdminPermissionGroup[]>([])
@@ -72,6 +75,15 @@ async function selectRole(id: string) {
   }
 }
 
+function handleOpenCreate() {
+  editForm.id = ''
+  editForm.name = ''
+  editForm.description = ''
+  editForm.permissions = []
+  isCreateMode.value = true
+  editDrawerVisible.value = true
+}
+
 function handleOpenEdit() {
   if (!currentRole.value) return
   editForm.id = currentRole.value.id
@@ -80,8 +92,11 @@ function handleOpenEdit() {
   editForm.permissions = currentRole.value.permissionCodes?.length
     ? [...currentRole.value.permissionCodes]
     : permissionCodesFromNames(currentRole.value.permissions || [])
+  isCreateMode.value = false
   editDrawerVisible.value = true
 }
+
+const isCreateMode = ref(false)
 
 async function submitEdit() {
   if (!editForm.name.trim()) {
@@ -91,14 +106,27 @@ async function submitEdit() {
 
   saving.value = true
   try {
-    const role = await updateAdminRole(editForm.id, {
-      name: editForm.name.trim(),
-      description: editForm.description.trim(),
-      permissionCodes: editForm.permissions,
-    })
-    replaceRole(role)
-    editDrawerVisible.value = false
-    ElMessage.success(`角色 [${role.name}] 已成功更新`)
+    if (isCreateMode.value) {
+      const role = await createAdminRole({
+        name: editForm.name.trim(),
+        description: editForm.description.trim(),
+        roleCode: editForm.name.trim().toUpperCase().replace(/\s+/g, '_'),
+        permissionCodes: editForm.permissions,
+      })
+      roles.value.push(role)
+      selectedRoleId.value = role.id
+      editDrawerVisible.value = false
+      ElMessage.success(`角色 [${role.name}] 已创建`)
+    } else {
+      const role = await updateAdminRole(editForm.id, {
+        name: editForm.name.trim(),
+        description: editForm.description.trim(),
+        permissionCodes: editForm.permissions,
+      })
+      replaceRole(role)
+      editDrawerVisible.value = false
+      ElMessage.success(`角色 [${role.name}] 已成功更新`)
+    }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '角色保存失败')
   } finally {
@@ -106,19 +134,32 @@ async function submitEdit() {
   }
 }
 
-function handleDelete() {
+async function handleDelete() {
   if (!currentRole.value) return
   if (currentRole.value.users > 0) {
     ElMessage.warning('该角色下还有绑定用户，无法直接删除')
     return
   }
-  ElMessageBox.confirm(`确认要删除角色 [${currentRole.value.name}] 吗？`, '警告', {
-    type: 'warning',
-    confirmButtonText: '确认删除',
-    cancelButtonText: '取消',
-  }).then(() => {
+  try {
+    await ElMessageBox.confirm(`确认要删除角色 [${currentRole.value.name}] 吗？`, '警告', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+    })
+    await deleteAdminRole(currentRole.value.id)
+    const index = roles.value.findIndex(r => r.id === currentRole.value!.id)
+    if (index >= 0) {
+      roles.value.splice(index, 1)
+    }
+    if (roles.value.length > 0) {
+      selectedRoleId.value = roles.value[0].id
+    } else {
+      selectedRoleId.value = ''
+    }
     ElMessage.success('已删除')
-  }).catch(() => {})
+  } catch {
+    // cancelled
+  }
 }
 
 function replaceRole(role: AdminRole) {
@@ -148,7 +189,9 @@ function permissionCodesFromNames(names: string[]) {
         <h1>角色与权限</h1>
         <p>配置系统权限矩阵，确保团队成员拥有合适的访问级别。</p>
       </div>
-      <el-button type="primary" :icon="Plus" size="large" round>新建角色</el-button>
+      <el-button v-if="hasPermission('role.create')" type="primary" :icon="Plus" size="large" round @click="handleOpenCreate">
+        新建角色
+      </el-button>
     </div>
 
     <div class="role-layout" v-loading="loading">

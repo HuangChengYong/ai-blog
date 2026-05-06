@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { isAuthenticated } from '../services/auth'
+import { hasPermission, isAuthenticated } from '../services/auth'
 
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
@@ -14,6 +14,17 @@ import MenuList from '../views/admin/MenuList.vue'
 import PermissionList from '../views/admin/PermissionList.vue'
 import RoleList from '../views/admin/RoleList.vue'
 import UserList from '../views/admin/UserList.vue'
+
+const routePermissions: Record<string, string> = {
+  'admin-overview': 'dashboard.view',
+  'admin-studio': 'studio.generate',
+  'admin-articles': 'article.edit',
+  'admin-approvals': 'approval.review',
+  'admin-users': 'user.view',
+  'admin-roles': 'role.view',
+  'admin-permissions': 'permission.manage',
+  'admin-menus': 'menu.manage',
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -53,6 +64,11 @@ router.beforeEach((to) => {
 
   if (to.name === 'login' && isAuthenticated.value) {
     return { path: '/admin' }
+  }
+
+  const permission = to.name ? routePermissions[String(to.name)] : undefined
+  if (permission && !hasPermission(permission)) {
+    return { path: '/admin/overview' }
   }
 
   return true

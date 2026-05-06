@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -15,7 +15,7 @@ import {
   User,
   UserFilled,
 } from '@element-plus/icons-vue'
-import { changePassword, getAdminUsername, logout } from '../../services/auth'
+import { changePassword, getAdminUsername, hasPermission, logout } from '../../services/auth'
 
 const router = useRouter()
 const username = getAdminUsername()
@@ -28,16 +28,18 @@ const passwordForm = reactive({
   confirm: '',
 })
 
-const navItems = [
-  { path: '/admin/overview', label: '总览', icon: DataAnalysis },
-  { path: '/admin/studio', label: 'AI 写作', icon: MagicStick },
-  { path: '/admin/articles', label: '文章管理', icon: Document },
-  { path: '/admin/approvals', label: '内容审核', icon: FolderChecked },
-  { path: '/admin/users', label: '用户管理', icon: User },
-  { path: '/admin/roles', label: '角色管理', icon: Setting },
-  { path: '/admin/permissions', label: '权限配置', icon: Key },
-  { path: '/admin/menus', label: '菜单管理', icon: MenuIcon },
+const allNavItems = [
+  { path: '/admin/overview', label: '总览', icon: DataAnalysis, permission: 'dashboard.view' },
+  { path: '/admin/studio', label: 'AI 写作', icon: MagicStick, permission: 'studio.generate' },
+  { path: '/admin/articles', label: '文章管理', icon: Document, permission: 'article.edit' },
+  { path: '/admin/approvals', label: '内容审核', icon: FolderChecked, permission: 'approval.review' },
+  { path: '/admin/users', label: '用户管理', icon: User, permission: 'user.view' },
+  { path: '/admin/roles', label: '角色管理', icon: Setting, permission: 'role.view' },
+  { path: '/admin/permissions', label: '权限配置', icon: Key, permission: 'permission.manage' },
+  { path: '/admin/menus', label: '菜单管理', icon: MenuIcon, permission: 'menu.manage' },
 ]
+
+const navItems = computed(() => allNavItems.filter(item => hasPermission(item.permission)))
 
 async function handlePasswordChange() {
   if (!passwordForm.current || !passwordForm.next) {
