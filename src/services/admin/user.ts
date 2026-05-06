@@ -3,17 +3,25 @@ import { request } from '../api'
 export interface AdminUser {
     id: string
     name: string
+    nickname: string
+    avatarUrl?: string
+    roleId: string
     role: string
     status: string
+    statusValue: number
     scope: string
+    dataScope: string
     lastSeen: string
 }
 
 export interface UpdateUserRequest {
     username: string
     password?: string
+    nickname?: string
+    avatarUrl?: string
     roleId: string
     dataScope: string
+    status?: number
 }
 
 export const loadAdminUsers = () =>

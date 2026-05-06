@@ -1,12 +1,25 @@
 import { ref } from 'vue'
 import { clearToken, getStoredUser, getToken, request, setStoredUser, setToken } from './api'
 
+export interface AdminSessionUser {
+  id?: string
+  username: string
+  nickname?: string
+  avatarUrl?: string
+  roleName?: string
+  dataScope?: string
+  permissions?: string[]
+}
+
 interface LoginResponse {
   tokenType: string
   accessToken: string
   userId: string
   username: string
   nickname: string
+  avatarUrl?: string
+  roleName?: string
+  dataScope?: string
   permissions: string[]
 }
 
@@ -14,13 +27,29 @@ interface CurrentUserResponse {
   id: string
   username: string
   nickname: string
+  avatarUrl?: string
+  roleName?: string
+  dataScope?: string
   permissions: string[]
 }
 
 export const isAuthenticated = ref(Boolean(getToken()))
+export const currentAdminUser = ref<AdminSessionUser | null>(getStoredUser())
 
 export function getAdminUsername() {
-  return getStoredUser()?.nickname || getStoredUser()?.username || 'admin'
+  return currentAdminUser.value?.nickname || currentAdminUser.value?.username || 'admin'
+}
+
+export function getAdminRoleName() {
+  return currentAdminUser.value?.roleName || '未分配角色'
+}
+
+export function getAdminAvatarUrl() {
+  return currentAdminUser.value?.avatarUrl || ''
+}
+
+export function hasAnyPermission() {
+  return Boolean(currentAdminUser.value?.permissions?.length)
 }
 
 export async function login(username: string, password: string) {
@@ -30,20 +59,36 @@ export async function login(username: string, password: string) {
   })
 
   setToken(session.accessToken)
-  setStoredUser({ username: session.username, nickname: session.nickname, permissions: session.permissions })
+  persistUser({
+    id: session.userId,
+    username: session.username,
+    nickname: session.nickname,
+    avatarUrl: session.avatarUrl,
+    roleName: session.roleName,
+    dataScope: session.dataScope,
+    permissions: session.permissions,
+  })
   isAuthenticated.value = true
   return true
 }
 
 export async function loadCurrentUser() {
   const current = await request<CurrentUserResponse>('/admin/current')
-  setStoredUser({ username: current.username, nickname: current.nickname, permissions: current.permissions })
+  persistUser({
+    id: current.id,
+    username: current.username,
+    nickname: current.nickname,
+    avatarUrl: current.avatarUrl,
+    roleName: current.roleName,
+    dataScope: current.dataScope,
+    permissions: current.permissions,
+  })
   isAuthenticated.value = true
   return current
 }
 
 export function hasPermission(permission: string) {
-  const permissions = getStoredUser()?.permissions || []
+  const permissions = currentAdminUser.value?.permissions || []
   return permissions.includes(permission)
 }
 
@@ -57,5 +102,11 @@ export async function changePassword(current: string, next: string) {
 
 export function logout() {
   clearToken()
+  currentAdminUser.value = null
   isAuthenticated.value = false
+}
+
+function persistUser(user: AdminSessionUser) {
+  setStoredUser(user)
+  currentAdminUser.value = user
 }

@@ -44,10 +44,26 @@ export function clearToken() {
 
 export function getStoredUser() {
   const raw = window.localStorage.getItem(USER_KEY)
-  return raw ? JSON.parse(raw) as { username: string; nickname?: string; permissions?: string[] } : null
+  return raw ? JSON.parse(raw) as {
+    id?: string
+    username: string
+    nickname?: string
+    avatarUrl?: string
+    roleName?: string
+    dataScope?: string
+    permissions?: string[]
+  } : null
 }
 
-export function setStoredUser(user: { username: string; nickname?: string; permissions?: string[] }) {
+export function setStoredUser(user: {
+  id?: string
+  username: string
+  nickname?: string
+  avatarUrl?: string
+  roleName?: string
+  dataScope?: string
+  permissions?: string[]
+}) {
   window.localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 

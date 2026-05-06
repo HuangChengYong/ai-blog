@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -15,12 +15,22 @@ import {
   User,
   UserFilled,
 } from '@element-plus/icons-vue'
-import { changePassword, getAdminUsername, hasPermission, logout } from '../../services/auth'
+import {
+  changePassword,
+  getAdminAvatarUrl,
+  getAdminRoleName,
+  getAdminUsername,
+  hasPermission,
+  loadCurrentUser,
+  logout,
+} from '../../services/auth'
 
 const router = useRouter()
-const username = getAdminUsername()
 const profileDialogVisible = ref(false)
 const passwordDialogVisible = ref(false)
+const username = computed(() => getAdminUsername())
+const roleName = computed(() => getAdminRoleName())
+const avatarUrl = computed(() => getAdminAvatarUrl())
 
 const passwordForm = reactive({
   current: '',
@@ -40,6 +50,15 @@ const allNavItems = [
 ]
 
 const navItems = computed(() => allNavItems.filter(item => hasPermission(item.permission)))
+
+onMounted(async () => {
+  try {
+    await loadCurrentUser()
+  } catch {
+    logout()
+    router.replace('/admin/login')
+  }
+})
 
 async function handlePasswordChange() {
   if (!passwordForm.current || !passwordForm.next) {
@@ -103,8 +122,14 @@ function handleUserCommand(command: string) {
 
       <el-dropdown trigger="click" @command="handleUserCommand">
         <button class="admin-user-menu" type="button">
-          <span>{{ username }}</span>
-          <span class="admin-avatar"><el-icon><UserFilled /></el-icon></span>
+          <span class="admin-user-copy">
+            <strong>{{ username }}</strong>
+            <small>{{ roleName }}</small>
+          </span>
+          <span class="admin-avatar">
+            <img v-if="avatarUrl" :src="avatarUrl" alt="" />
+            <el-icon v-else><UserFilled /></el-icon>
+          </span>
         </button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -131,6 +156,9 @@ function handleUserCommand(command: string) {
               <span>{{ item.label }}</span>
             </button>
           </router-link>
+          <div v-if="navItems.length === 0" class="admin-nav-empty">
+            暂无可访问菜单
+          </div>
         </nav>
       </aside>
 
@@ -146,8 +174,8 @@ function handleUserCommand(command: string) {
         <span class="admin-avatar large"><el-icon><UserFilled /></el-icon></span>
         <div>
           <h3>{{ username }}</h3>
-          <p>系统管理员</p>
-          <p>负责内容管理、审核发布和访问控制。</p>
+          <p>{{ roleName }}</p>
+          <p>当前账号会按照已分配角色动态展示菜单与权限。</p>
         </div>
       </div>
     </el-dialog>
