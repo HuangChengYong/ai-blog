@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, User, UserFilled } from '@element-plus/icons-vue'
 import {
+  assignAdminUserRole,
   createAdminUser,
   deleteAdminUser,
   loadAdminUsers,
@@ -19,8 +20,16 @@ const users = ref<AdminUser[]>([])
 const roles = ref<AdminRole[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
+const submitLoading = ref(false)
+const actionLoadingKey = ref('')
 const isEdit = ref(false)
 const editId = ref('')
+const roleDialogVisible = ref(false)
+const roleSubmitLoading = ref(false)
+const roleUser = ref<AdminUser | null>(null)
+const roleForm = reactive({
+  roleId: '',
+})
 
 const form = reactive<UpdateUserRequest>({
   username: '',
@@ -64,6 +73,14 @@ async function load() {
   }
 }
 
+function actionKey(action: string, userId: string) {
+  return `${action}:${userId}`
+}
+
+function isActionLoading(action: string, userId: string) {
+  return actionLoadingKey.value === actionKey(action, userId)
+}
+
 function openCreate() {
   isEdit.value = false
   editId.value = ''
@@ -99,6 +116,7 @@ async function handleSubmit() {
     ElMessage.warning('密码不能为空')
     return
   }
+  submitLoading.value = true
   try {
     if (isEdit.value) {
       await updateAdminUser(editId.value, {
@@ -127,6 +145,8 @@ async function handleSubmit() {
     await load()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    submitLoading.value = false
   }
 }
 
@@ -137,11 +157,16 @@ async function handleDelete(user: AdminUser) {
       cancelButtonText: '取消',
       type: 'warning',
     })
+    actionLoadingKey.value = actionKey('delete', user.id)
     await deleteAdminUser(user.id)
     ElMessage.success('用户已删除')
     await load()
-  } catch {
-    // cancelled
+  } catch (error) {
+    if (error instanceof Error) {
+      ElMessage.error(error.message)
+    }
+  } finally {
+    actionLoadingKey.value = ''
   }
 }
 
@@ -153,6 +178,7 @@ async function handleToggleStatus(user: AdminUser) {
       cancelButtonText: '取消',
       type: 'warning',
     })
+    actionLoadingKey.value = actionKey('status', user.id)
     await toggleUserStatus(user.id, nextStatus)
     ElMessage.success(nextStatus === 1 ? '用户已启用' : '用户已停用')
     await load()
@@ -160,6 +186,34 @@ async function handleToggleStatus(user: AdminUser) {
     if (error instanceof Error) {
       ElMessage.error(error.message)
     }
+  } finally {
+    actionLoadingKey.value = ''
+  }
+}
+
+async function openAssignRole(user: AdminUser) {
+  roleUser.value = user
+  roleForm.roleId = user.roleId || ''
+  roleDialogVisible.value = true
+  try {
+    roles.value = await loadAdminRoles()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '角色加载失败')
+  }
+}
+
+async function handleAssignRole() {
+  if (!roleUser.value) return
+  roleSubmitLoading.value = true
+  try {
+    await assignAdminUserRole(roleUser.value.id, { roleId: roleForm.roleId || '' })
+    ElMessage.success('角色已绑定')
+    roleDialogVisible.value = false
+    await load()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '绑定失败')
+  } finally {
+    roleSubmitLoading.value = false
   }
 }
 </script>
@@ -168,7 +222,7 @@ async function handleToggleStatus(user: AdminUser) {
   <section class="admin-page-section">
     <div class="admin-page-head">
       <h1>用户管理</h1>
-      <el-button v-if="hasPermission('user.create')" type="primary" :icon="User" @click="openCreate">
+      <el-button v-if="hasPermission('user.create')" type="primary" :icon="User" :disabled="loading" @click="openCreate">
         新建用户
       </el-button>
     </div>
@@ -193,14 +247,26 @@ async function handleToggleStatus(user: AdminUser) {
               v-if="hasPermission('user.update')"
               :icon="Edit"
               size="small"
+              :disabled="Boolean(actionLoadingKey)"
               @click="openEdit(user)"
             >
               编辑
             </el-button>
             <el-button
+              v-if="hasPermission('user.update')"
+              :icon="User"
+              size="small"
+              :disabled="Boolean(actionLoadingKey)"
+              @click="openAssignRole(user)"
+            >
+              绑定角色
+            </el-button>
+            <el-button
               v-if="hasPermission('user.disable')"
               size="small"
               :type="user.status === '启用' ? 'warning' : 'success'"
+              :loading="isActionLoading('status', user.id)"
+              :disabled="Boolean(actionLoadingKey) && !isActionLoading('status', user.id)"
               @click="handleToggleStatus(user)"
             >
               {{ user.status === '启用' ? '停用' : '启用' }}
@@ -210,6 +276,8 @@ async function handleToggleStatus(user: AdminUser) {
               :icon="Delete"
               size="small"
               type="danger"
+              :loading="isActionLoading('delete', user.id)"
+              :disabled="Boolean(actionLoadingKey) && !isActionLoading('delete', user.id)"
               @click="handleDelete(user)"
             >
               删除
@@ -259,8 +327,31 @@ async function handleToggleStatus(user: AdminUser) {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">保存</el-button>
+        <el-button :disabled="submitLoading" @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleSubmit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="roleDialogVisible" title="绑定角色" width="min(420px, 92vw)">
+      <el-form label-position="top">
+        <el-form-item label="用户">
+          <el-input :model-value="roleUser?.name || ''" size="large" disabled />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="roleForm.roleId" size="large" placeholder="请选择角色">
+            <el-option label="未分配角色" value="" />
+            <el-option
+              v-for="role in roles"
+              :key="role.id"
+              :label="role.name"
+              :value="role.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="roleSubmitLoading" @click="roleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="roleSubmitLoading" @click="handleAssignRole">保存</el-button>
       </template>
     </el-dialog>
   </section>

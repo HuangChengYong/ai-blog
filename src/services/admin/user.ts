@@ -24,6 +24,10 @@ export interface UpdateUserRequest {
     status?: number
 }
 
+export interface AssignUserRoleRequest {
+    roleId: string
+}
+
 export const loadAdminUsers = () =>
     request<AdminUser[]>('/admin/users')
 
@@ -38,3 +42,6 @@ export const deleteAdminUser = (id: string) =>
 
 export const toggleUserStatus = (id: string, status: number) =>
     request<void>(`/admin/users/${id}/status?status=${status}`, { method: 'PUT' })
+
+export const assignAdminUserRole = (id: string, data: AssignUserRoleRequest) =>
+    request<void>(`/admin/users/${id}/role`, { method: 'PUT', body: JSON.stringify(data) })
